@@ -1,0 +1,13 @@
+[Unit]
+Description=Fcitx5 Input Method Service
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/fcitx5 -D
+Slice=session-graphical.slice
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

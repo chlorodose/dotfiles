@@ -1,0 +1,163 @@
+config_version = 14
+
+[plugins]
+enabled = [
+    "umedbazarov/crashes",
+    "tmelik/system-monitor",
+    "setyvii/niri-rules-studio",
+]
+
+[theme]
+source = "wallpaper"
+wallpaper_scheme = "soft"
+
+[shell]
+telemetry_enabled = true
+font_family = "Maple Mono NF CN"
+clipboard_enabled = true
+clipboard_keep_from_closed_apps = true
+clipboard_history_max_entries = 1024
+launch_apps_custom_command = "uwsm app -t service -s app-graphical.slice -- $CMD"
+polkit_agent = true
+password_style = "random"
+screen_time_enabled = true
+niri_overview_type_to_launch_enabled = true
+
+[shell.panel]
+floating_layer = "top"
+transparency_mode = "glass"
+control_center_position = "auto"
+open_near_click_wallpaper = true
+open_near_click_control_center = false
+list_item_background = true
+control_center_placement = "floating"
+session_placement = "floating"
+session_position = "center"
+
+[control_center]
+sidebar = "full"
+sidebar_section = "full"
+
+[notification]
+keep_dismissed_in_history = true
+history_retention_hours = 0
+layer = "overlay"
+
+[osd]
+orientation = "horizontal"
+
+[shell.screenshot]
+confirm_region = true
+directory = "/home/chlorodose/Pictures/Screenshots"
+filename_pattern = "screenshot_%Y-%m-%d_%H-%m"
+show_cursor = true
+
+[theme.templates]
+builtin_ids = ["gtk3", "gtk4", "kitty", "niri", "qt"]
+community_ids = ["neovim", "fcitx5", "pywalfox", "vscode"]
+
+[wallpaper]
+directory = "/home/chlorodose/Pictures/Wallpapers"
+transition_on_startup = true
+
+[dock]
+enabled = false
+
+[system.monitor]
+enabled = true
+
+[audio]
+enable_overdrive = true
+enable_sounds = true
+
+[location]
+auto_locate = false
+
+[backdrop]
+enabled = false
+
+[idle]
+behavior_order = ["lock", "screen-off", "lock-and-suspend"]
+pre_action_fade_seconds = 5
+
+[idle.behavior.lock]
+action = "lock"
+enabled = true
+timeout = 600.0
+
+[idle.behavior.lock-and-suspend]
+action = "lock_and_suspend"
+enabled = false
+timeout = 900.0
+
+[idle.behavior.screen-off]
+action = "screen_off"
+enabled = false
+timeout = 660.0
+
+[bar.default]
+center = ["active_window"]
+end = [
+    "media",
+    "tray",
+    "notifications",
+    "clipboard",
+    "bluetooth",
+    "volume",
+    "privacy",
+    "brightness",
+    "battery",
+    "clipboard",
+    "lock_keys",
+    "caffeine",
+    "control-center",
+    "session",
+]
+start = ["launcher", "wallpaper", "workspaces", "clock", "summary"]
+background_opacity = 0.01
+capsule = true
+capsule_foreground = "secondary"
+capsule_thickness = 0.95
+margin_edge = 5
+margin_ends = 5
+padding = 5
+panel_overlap = 1
+scale = 1.1
+thickness = 38
+
+[widget.active_window]
+min_length = 0
+
+[widget.active_window.actions]
+right = "panel-toggle setyvii/niri-rules-studio:panel"
+
+[widget.privacy]
+hide_inactive = true
+
+[widget.clock]
+format = "{:%A %Y/%m/%d %H:%M}"
+
+[widget.lock_keys]
+show_caps_lock = false
+show_num_lock = false
+
+[widget.summary]
+activity_color = "secondary"
+disk_path = "/var"
+type = "tmelik/system-monitor:summary"
+
+[widget.tray]
+detached_panel = true
+drawer = true
+
+[widget.workspaces]
+hide_when_empty = true
+
+[widget.launcher]
+glyph = "rocket"
+
+[plugin_settings."umedbazarov/crashes"]
+agent_cmd = "false"
+
+[plugin_settings."setyvii/niri-rules-studio"]
+niri_config = "/home/chlorodose/.config/niri/managed.kdl"

@@ -1,0 +1,13 @@
+[Unit]
+Description=QuickShell Service
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/noctalia
+Slice=session-graphical.slice
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,28 @@
+add_newline = false
+format = "$os$shell$container$all$line_break$character"
+
+[memory_usage]
+disabled = false
+style = "bold dimmed red"
+symbol = " "
+threshold = 75
+
+[os]
+disabled = false
+
+[shell]
+bash_indicator = " "
+disabled = false
+fish_indicator = "󰈺 "
+nu_indicator = "_"
+zsh_indicator = " "
+
+[status]
+disabled = false
+
+[time]
+disabled = false
+
+[username]
+show_always = true
+

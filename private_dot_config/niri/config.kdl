@@ -1,0 +1,66 @@
+input {
+    warp-mouse-to-focus
+    workspace-auto-back-and-forth
+    mod-key "Super"
+}
+screenshot-path "~/Pictures/Screenshots/niri/%Y-%m-%d_%H-%M-%S.png"
+prefer-no-csd
+layout {
+    gaps 14
+    struts {
+        left 0
+        right 0
+        top 0
+        bottom 0
+    }
+    focus-ring {
+        width 4
+    }
+    border { off; }
+    default-column-width
+    center-focused-column "on-overflow"
+    always-center-single-column
+    empty-workspace-above-first
+}
+cursor {
+    xcursor-theme "default"
+    xcursor-size 36
+    hide-after-inactive-ms 3000
+}
+include "noctalia.kdl"
+binds {
+    Mod+A hotkey-overlay-title="Foucs to the window on the left." { focus-column-left; }
+    Mod+C hotkey-overlay-title="Close the window." { close-window; }
+    "Mod+Caps_Lock" hotkey-overlay-title="Toggle floating for the focused window." { toggle-window-floating; }
+    Mod+Ctrl+A hotkey-overlay-title="Move the window to the left." { set-column-width "-5%"; }
+    Mod+Ctrl+D hotkey-overlay-title="Move the window to the right." { set-column-width "+5%"; }
+    Mod+Ctrl+S hotkey-overlay-title="Move the window to the bottom." { set-window-height "+5%"; }
+    Mod+Ctrl+W hotkey-overlay-title="Move the window to the top." { set-window-height "-5%"; }
+    Mod+D hotkey-overlay-title="Foucs to the window on the right." { focus-column-right; }
+    Mod+E hotkey-overlay-title="Start app luncher" repeat=false { spawn "noctalia" "msg" "panel-toggle" "launcher";}
+    Mod+L hotkey-overlay-title="Lock screen." { spawn "noctalia" "msg" "session" "lock"; }
+    Mod+M hotkey-overlay-title="Show session menu." { spawn "noctalia" "msg" "panel-toggle" "session"; }
+    Mod+Q hotkey-overlay-title="Start termial(kitty)." repeat=false { spawn "uwsm" "app" "-t" "service" "--" "kitty.desktop"; }
+    Mod+R hotkey-overlay-title="Start clipboard history searcher" repeat=false { spawn "qs" "ipc" "call" "launcher" "clipboard"; }
+    Mod+S hotkey-overlay-title="Fouce to the workspace on the bottom." { focus-workspace-down; }
+    Mod+Shift+A hotkey-overlay-title="Foucs to the window on the left." { move-column-left; }
+    Mod+Shift+D hotkey-overlay-title="Foucs to the window on the right." { move-column-right; }
+    Mod+Shift+S hotkey-overlay-title="Fouce to the workspace on the bottom." { move-column-to-workspace-down; }
+    Mod+Shift+W hotkey-overlay-title="Foucs to the workspace on the top." { move-column-to-workspace-up; }
+    Mod+Tab hotkey-overlay-title="Toggle overview mode." { toggle-overview; }
+    Mod+W hotkey-overlay-title="Foucs to the workspace on the top." { focus-workspace-up; }
+    Mod+X hotkey-overlay-title="Toggle fullscreen for the focused window." { fullscreen-window; }
+    Mod+Z hotkey-overlay-title="Toggle maximized for the focused window." { maximize-column; }
+    Print hotkey-overlay-title="Take Area ScreenShot." repeat=false { spawn "noctalia" "msg" "screenshot-region"; }
+}
+layer-rule {
+    match namespace="notifications"
+    opacity 0.750000
+}
+gestures { hot-corners { off; }; }
+xwayland-satellite { path "/usr/bin/xwayland-satellite"; }
+debug {
+	disable-direct-scanout
+}
+include "managed.kdl"
+
