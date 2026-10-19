@@ -1,6 +1,9 @@
 ZPFX="${XDG_DATA_HOME:-${HOME}/.local/share}/zsh"
 [ -d "$ZPFX" ] || mkdir -p "${ZPFX}"
 
+typeset -U path
+path=("$HOME/.local/bin" $path)
+
 declare -A ZINIT
 ZINIT[HOME_DIR]="${ZPFX}"
 ZINIT[BIN_DIR]="${ZINIT[HOME_DIR]}/plugins/zinit"
