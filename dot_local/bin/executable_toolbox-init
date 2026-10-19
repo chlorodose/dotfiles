@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ ! -e /run/.toolboxenv ]; then
+    exec toolbox run -- "$0" "$@"
+fi
+
+if [ -e /usr/share/toolbox-inited ]; then
+    exit 0
+fi
+sudo install -m 0644 /dev/null /usr/share/toolbox-inited
+
+TMPFILE="$(mktemp)"
+trap 'rm -f "$TMPFILE"' EXIT
+
+cat - >"$TMPFILE" <<EOF
+[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=1
+type=rpm-md
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
+
+sudo dnf --repofrompath "vscode,https://packages.microsoft.com/yumrepos/vscode" --repo=vscode --nogpgcheck install -y code
+
+[ -e "$HOME/Projects/codex-desktop-linux" ] && make -C "$HOME/Projects/codex-desktop-linux" install
+
+echo 'Toolbox initialization complete.' >&2

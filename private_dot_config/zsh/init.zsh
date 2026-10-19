@@ -13,6 +13,11 @@ HISTFILE="${ZPFX}/histfile"
 [ -f "$HISTFILE" ] || touch "${HISTFILE}"
 SAVEHIST=2147483648
 
+import_zsh() {
+    local base_dir=${${(%):-%x}:A:h}
+    source "$base_dir/$1"
+}
+
 setopt autocd beep hist_ignore_dups nonomatch extendedglob notify
 bindkey -v
 
@@ -36,5 +41,7 @@ zi for \
 	OMZP::sudo
 
 [ "$TERM" = "kitty" ] && zi load OMZP::kitty
+
+[ -e /run/.toolboxenv ] && import_zsh toolbox.zsh
 
 zicompinit
