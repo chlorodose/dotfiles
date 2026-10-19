@@ -1,0 +1,13 @@
+[Unit]
+Description=ydotool input daemon
+Documentation=man:ydotoold(8)
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/ydotoold
+Restart=on-failure
+RestartSec=1s
+Slice=session-graphical.slice
+
+[Install]
+WantedBy=default.target
