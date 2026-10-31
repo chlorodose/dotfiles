@@ -1,0 +1,18 @@
+[Unit]
+Description=Weston for the Valkyrie USB displays (AMD GLES)
+After=graphical-session.target
+PartOf=stats-screen.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=all
+RuntimeDirectory=valkyrie
+RuntimeDirectoryMode=0700
+Environment=LIBSEAT_BACKEND=noop
+ExecStart=%h/.config/valkyrie/valkyrie-weston
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=25
+TimeoutStopSec=10
+Slice=session-graphical.slice

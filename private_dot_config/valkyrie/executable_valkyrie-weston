@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# Resolve stable device paths and generate Weston output names; systemd owns lifecycle.
+set -euo pipefail
+small=/dev/dri/by-path/pci-0000:11:00.0-usb-0:6:1.3-card
+tall=/dev/dri/by-path/pci-0000:11:00.0-usb-0:8.1:1.3-card
+amd=/dev/dri/by-path/pci-0000:7b:00.0-card
+for device in "$small" "$tall" "$amd"; do
+    [[ -r "$device" && -w "$device" ]] || { echo "Device unavailable: $device" >&2; exit 1; }
+done
+amd_card=$(basename "$(readlink -f "$amd")")
+small_card=$(basename "$(readlink -f "$small")")
+tall_card=$(basename "$(readlink -f "$tall")")
+[[ $(basename "$(readlink -f "/sys/class/drm/$amd_card/device/driver")") == amdgpu ]]
+for card in "$small_card" "$tall_card"; do
+    [[ $(basename "$(readlink -f "/sys/class/drm/$card/device/driver")") == valkyrie_lcd ]]
+done
+small_connector=(/sys/class/drm/"$small_card"-USB-*)
+tall_connector=(/sys/class/drm/"$tall_card"-USB-*)
+small_name=${small_connector[0]##*/}; small_name=${small_name#"$small_card"-USB-}
+tall_name=${tall_connector[0]##*/}; tall_name=${tall_name#"$tall_card"-USB-}
+sed -e "s/^name=UNNAMED-1$/name=UNNAMED-$small_name/" \
+    -e "s/^name=UNNAMED-2$/name=UNNAMED-$tall_name/" \
+    "$HOME/.config/valkyrie/weston.ini" > "$XDG_RUNTIME_DIR/valkyrie/weston.ini"
+printf '\n[autolaunch]\npath=%s/.config/valkyrie/weston-ready.py\nwatch=false\n' "$HOME" \
+    >> "$XDG_RUNTIME_DIR/valkyrie/weston.ini"
+exec /usr/bin/weston --backend=drm --renderer=gl \
+    --drm-device="$amd_card" --additional-devices="$small_card,$tall_card" \
+    --seat=valkyrie --continue-without-input \
+    --socket="$XDG_RUNTIME_DIR/valkyrie/wayland-0" \
+    --config="$XDG_RUNTIME_DIR/valkyrie/weston.ini"

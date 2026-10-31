@@ -1,0 +1,21 @@
+[Unit]
+Description=Eww system dashboard on the Valkyrie tall display
+Requires=valkyrie-weston.service
+Wants=valkyrie-stats.service
+After=valkyrie-weston.service valkyrie-stats.service
+PartOf=stats-screen.target valkyrie-weston.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+EnvironmentFile=%t/valkyrie/display.env
+Environment=GDK_BACKEND=x11 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=weston
+Environment=GTK_IM_MODULE=gtk-im-context-simple NO_AT_BRIDGE=1 TOKIO_WORKER_THREADS=2
+ExecStart=/usr/bin/eww --no-daemonize -c %h/.config/valkyrie/eww-tall daemon
+ExecStartPost=/usr/bin/eww --no-daemonize -c %h/.config/valkyrie/eww-tall open tall
+Restart=on-failure
+RestartSec=3
+Slice=session-graphical.slice
+
+[Install]
+WantedBy=stats-screen.target

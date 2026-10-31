@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+set -euo pipefail
+# Weston supplies the DISPLAY of its private Xwayland instance.
+: "${DISPLAY:?Weston did not supply DISPLAY}"
+unset WAYLAND_DISPLAY
+export GDK_BACKEND=x11 XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=weston
+export GTK_IM_MODULE=gtk-im-context-simple NO_AT_BRIDGE=1
+export TOKIO_WORKER_THREADS=2
+EWW=/usr/bin/eww
+configs="$HOME/.config/valkyrie"
+pids=()
+cleanup() {
+    trap - EXIT TERM INT
+    for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
+    wait || true
+}
+trap cleanup EXIT TERM INT
+# Trigger Weston's on-demand Xwayland and wait for it to answer.
+ready=false
+for ((attempt=0; attempt<100; attempt++)); do
+    if /usr/bin/xprop -root >/dev/null 2>&1; then ready=true; break; fi
+    sleep 0.1
+done
+$ready || { echo 'Private Xwayland did not become ready' >&2; exit 1; }
+export WESTON_PID=$PPID
+/usr/bin/python3 "$configs/stats.py" --once
+/usr/bin/python3 "$configs/stats.py" &
+pids+=("$!")
+for screen in small tall; do
+    "$EWW" --no-daemonize -c "$configs/eww-$screen" daemon &
+    pids+=("$!")
+    ready=false
+    for ((attempt=0; attempt<100; attempt++)); do
+        if "$EWW" -c "$configs/eww-$screen" ping >/dev/null 2>&1; then ready=true; break; fi
+        kill -0 "${pids[-1]}" 2>/dev/null || exit 1
+        sleep 0.1
+    done
+    $ready || exit 1
+    "$EWW" -c "$configs/eww-$screen" open "$screen"
+    "$EWW" -c "$configs/eww-$screen" active-windows | /usr/bin/grep -q "^$screen: $screen$"
+done
+# Restart the whole display session if the sampler or either independent Eww daemon exits.
+wait -n "${pids[@]}" || true
+exit 1

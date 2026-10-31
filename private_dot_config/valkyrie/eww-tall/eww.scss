@@ -1,0 +1,31 @@
+* { all: unset; font-family: "Noto Sans", sans-serif; color: #e7eff8; }
+.system { background: #0b1119; padding: 12px 16px; }
+.header { min-height: 24px; }
+.brand { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
+.clock { font-size: 23px; font-weight: bold; color: #f4f8fc; }
+.ok { font-size: 10px; color: #66d9af; letter-spacing: 1px; }
+.hot { font-size: 10px; color: #ff776f; letter-spacing: 1px; }
+.muted { font-size: 10px; color: #8194aa; }
+.card { border: 1px solid #253347; border-radius: 10px; background: #111c29; padding: 12px; }
+.title { font-size: 11px; font-weight: bold; letter-spacing: 1px; }
+.model { color: #91a6bc; font-size: 10px; }
+.big { font-size: 34px; font-weight: bold; }
+.temperature { font-size: 18px; margin-bottom: 5px; }
+.cpu .title, .cpu .big, .cpu .temperature { color: #71d8ee; }
+.gpu .title, .gpu .big, .gpu .temperature { color: #f0ba75; }
+.memory .title, .memory .big, .memory .temperature { color: #74dab2; }
+.storage .title, .storage .big, .storage .temperature { color: #b5a6f4; }
+progressbar trough { background: #223044; border-radius: 4px; min-height: 5px; }
+progressbar progress { background: #71d8ee; border-radius: 4px; min-height: 5px; }
+.gpu progressbar progress { background: #f0ba75; }
+.memory progressbar progress { background: #74dab2; }
+.storage progressbar progress { background: #b5a6f4; }
+.swap-bar trough, .swap-bar progress { min-height: 3px; }
+.data-row { min-height: 16px; }
+.row-value { font-size: 11px; color: #d6e3f2; }
+.footnote { color: #7e93ab; font-size: 10px; }
+.footer { border-top: 1px solid #223044; padding-top: 9px; min-height: 38px; }
+.footer-value { color: #d6e3f2; font-size: 13px; }
+.renderer { color: #71d8ee; font-size: 10px; }
+
+.fan-values { color: #d6e3f2; font-size: 11px; }

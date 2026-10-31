@@ -1,0 +1,7 @@
+;; Physical header mapping; stats.py keeps the original nct6799 fan names.
+(defvar cpu_fan_channel "fan2")
+(defvar rear_fan_channel "fan1")
+(defvar bottom_fan_channel "fan4")
+(defvar side_fan_channel "fan5")
+(defvar pump_channel "fan7")
+;; fan3 and fan6 have no tachometer signal and are not assigned.

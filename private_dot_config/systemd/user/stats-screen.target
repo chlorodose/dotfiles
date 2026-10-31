@@ -1,0 +1,7 @@
+[Unit]
+Description=Valkyrie system status displays
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Install]
+WantedBy=default.target

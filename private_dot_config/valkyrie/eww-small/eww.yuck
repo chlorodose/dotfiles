@@ -1,0 +1,26 @@
+(include "../telemetry.yuck")
+(include "../fan-map.yuck")
+(defwindow small :monitor 0
+ :geometry (geometry :width "320px" :height "240px" :anchor "top left")
+ :wm-ignore false :windowtype "normal" :stacking "fg"
+ (box :orientation "v" :class "cooler" :space-evenly false :spacing 5
+  (box :space-evenly false
+   (label :class "eyebrow" :text "CPU · 9950X3D" :xalign 0 :hexpand true)
+   (label :class "live" :text "● LIVE"))
+  (box :space-evenly false :valign "center"
+   (label :class "temperature" :text {stats.cpu_temp} :xalign 0 :hexpand true)
+   (box :orientation "v" :space-evenly false :spacing 3 :valign "center"
+    (label :class "muted" :text "PACKAGE / °C" :xalign 1)
+    (label :class "frequency" :text {stats.cpu_ghz} :xalign 1)))
+  (box :space-evenly false
+   (label :class "muted" :text "CPU LOAD" :xalign 0 :hexpand true)
+   (label :class "load-value" :text {stats.cpu_load}))
+  (progress :class "cpu-bar" :value {stats.cpu_pct})
+  (box :class "cooling" :space-evenly true :spacing 8
+   (box :orientation "v" :space-evenly false :spacing 3
+    (label :class "muted" :text "CPU FAN / RPM" :xalign 0)
+    (label :class "rpm" :text {stats.fans[cpu_fan_channel]} :xalign 0))
+   (box :orientation "v" :space-evenly false :spacing 3
+    (label :class "muted" :text "PUMP / RPM" :xalign 0)
+    (label :class "rpm" :text {stats.fans[pump_channel]} :xalign 0)))
+  (label :class "sensor-note" :text "CPU RADIATOR + AIO PUMP" :xalign 0)))

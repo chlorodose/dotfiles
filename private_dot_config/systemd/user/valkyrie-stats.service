@@ -1,0 +1,16 @@
+[Unit]
+Description=Shared hardware telemetry for the Valkyrie dashboards
+Requires=valkyrie-weston.service
+After=valkyrie-weston.service
+PartOf=stats-screen.target valkyrie-weston.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+EnvironmentFile=%t/valkyrie/display.env
+CacheDirectory=valkyrie
+ExecStartPre=/usr/bin/python3 %h/.config/valkyrie/stats.py --once
+ExecStart=/usr/bin/python3 %h/.config/valkyrie/stats.py
+Restart=on-failure
+RestartSec=3
+Slice=session-graphical.slice
