@@ -43,7 +43,7 @@ placement_width = 2560.0
 rotation = 0.0
 
 [lockscreen_widgets.widget.lockscreen-login-box.settings]
-background_color = "surface_variant"
+background_color = "surface_container"
 background_opacity = 0.8
 background_radius = 20.0
 center_password_text = false
