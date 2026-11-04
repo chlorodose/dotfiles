@@ -69,3 +69,13 @@ debug {
 }
 include "managed.kdl"
 
+// Keep the transparent desktop pet free of compositor decorations.
+window-rule {
+    match app-id="^codex-desktop$" title="^Codex Pet Overlay$"
+    open-floating true
+    open-focused false
+    draw-border-with-background false
+    focus-ring { off; }
+    border { off; }
+    shadow { off; }
+}
