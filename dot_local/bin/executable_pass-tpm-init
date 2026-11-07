@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""Initialize pass with non-exportable keys generated directly by a TPM 2.0.
+
+Host requirements: python3, libgcrypt, GnuPG with tpm2daemon, tpm2-tools,
+pass, and a working pinentry. Fedora's pinentry-gnome3 also needs gcr3.
+The user and gpg-agent need read/write access to /dev/tpmrm0 (group tss).
+GnuPG's keytotpm is deliberately not used: it imports software-generated keys.
+"""
+
+import argparse
+import ctypes
+import ctypes.util
+import fcntl
+import getpass
+import grp
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.parse
+
+
+class SetupError(Exception):
+    pass
+
+
+def run(*args, data=None):
+    result = subprocess.run(args, input=data, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    if result.returncode:
+        # Arguments contain paths, never the authorization passphrase.
+        raise SetupError(f"{args[0]} failed:\n{result.stderr.decode(errors='replace').strip()}")
+    return result.stdout
+
+
+def sexp(value):
+    if isinstance(value, (list, tuple)):
+        return b"(" + b"".join(map(sexp, value)) + b")"
+    return str(len(value)).encode() + b":" + value
+
+
+def keygrip(public):
+    lib = ctypes.CDLL(ctypes.util.find_library("gcrypt"))
+    lib.gcry_check_version.argtypes = [ctypes.c_char_p]
+    lib.gcry_check_version.restype = ctypes.c_char_p
+    lib.gcry_check_version(None)
+    lib.gcry_sexp_new.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p,
+                                 ctypes.c_size_t, ctypes.c_int]
+    lib.gcry_pk_get_keygrip.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    lib.gcry_pk_get_keygrip.restype = ctypes.c_void_p
+    lib.gcry_sexp_release.argtypes = [ctypes.c_void_p]
+    expression = ctypes.c_void_p()
+    if lib.gcry_sexp_new(ctypes.byref(expression), public, len(public), 1):
+        raise SetupError("libgcrypt rejected the public key")
+    try:
+        output = ctypes.create_string_buffer(20)
+        if not lib.gcry_pk_get_keygrip(expression, output):
+            raise SetupError("Cannot calculate the GnuPG keygrip")
+        return output.raw.hex().upper()
+    finally:
+        lib.gcry_sexp_release(expression)
+
+
+def public_point(blob, usage):
+    """Read a TPM2B_PUBLIC; reject unexpected templates before installing it."""
+    offset = 0
+
+    def take(size):
+        nonlocal offset
+        value = blob[offset:offset + size]
+        offset += size
+        if len(value) != size:
+            raise SetupError("Truncated TPM public key")
+        return value
+
+    def u16():
+        return int.from_bytes(take(2), "big")
+
+    def expect(condition):
+        if not condition:
+            raise SetupError("Unexpected TPM public-key template")
+
+    expect(u16() == len(blob) - 2)
+    expect(u16() == 0x23)  # ECC
+    expect(u16() == 0x0B)  # SHA-256 name algorithm
+    attributes = int.from_bytes(take(4), "big")
+    expected = 0x472 | (0x40000 if usage == "sign" else 0x20000)
+    expect(attributes == expected)  # fixedTPM, fixedParent, sensitiveDataOrigin,
+    # userWithAuth, noDA, and the requested signing/decryption capability.
+    expect(u16() == 0)  # authPolicy
+    expect(u16() == 0x10)  # symmetric NULL
+    expect(u16() == 0x10)  # scheme NULL
+    expect(u16() == 3)  # NIST P-256
+    expect(u16() == 0x10)  # KDF NULL
+    x, y = take(u16()), take(u16())
+    expect(0 < len(x) <= 32 and 0 < len(y) <= 32 and offset == len(blob))
+    return b"\x04" + x.rjust(32, b"\0") + y.rjust(32, b"\0")
+
+
+def ask_passphrase():
+    """Keep PIN data within this process and pinentry, outside argv/logs."""
+    process = subprocess.Popen(["pinentry"], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE)
+
+    def command(value=None):
+        if value is not None:
+            process.stdin.write(value + b"\n")
+            process.stdin.flush()
+        data = b""
+        while True:
+            line = process.stdout.readline().rstrip(b"\n")
+            if line.startswith(b"D "):
+                data += urllib.parse.unquote_to_bytes(line[2:])
+            elif line.startswith(b"OK"):
+                return data
+            elif line.startswith(b"ERR") or not line:
+                raise SetupError("Pinentry failed or was cancelled. For pinentry-gnome3, install gcr3.")
+
+    try:
+        command()
+        command(b"SETTITLE pass TPM keyring")
+        command(b"SETDESC Set the TPM key passphrase (1-32 UTF-8 bytes). On retry, enter the same passphrase.")
+        command(b"SETPROMPT TPM passphrase:")
+        command(b"SETREPEAT Confirm TPM passphrase:")
+        password = command(b"GETPIN")
+        command(b"BYE")
+        if not 1 <= len(password) <= 32 or b"\n" in password or b"\0" in password:
+            raise SetupError("Use 1-32 UTF-8 bytes, without newline or NUL. Empty TPM PINs are unsupported by GnuPG.")
+        return password
+    finally:
+        process.stdin.close()
+        process.stdout.close()
+        if process.poll() is None:
+            process.terminate()
+        process.wait()
+
+
+def atomic_write(path, data):
+    fd, temporary = tempfile.mkstemp(prefix=".pass-tpm-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def save_state(directory, state):
+    atomic_write(directory / "state.json", (json.dumps(state, indent=2) + "\n").encode())
+
+
+def find_identity(primary_grip, encryption_grip):
+    listing = run("gpg", "--batch", "--with-colons", "--with-keygrip", "--list-secret-keys").decode()
+    identities, current, part = [], None, None
+    for line in listing.splitlines():
+        fields = line.split(":")
+        if fields[0] == "sec":
+            current = {"subkeys": []}
+            identities.append(current)
+            part = "primary"
+        elif fields[0] == "ssb":
+            part = "subkey"
+        elif current is not None and fields[0] == "fpr" and part == "primary":
+            current["fingerprint"] = fields[9]
+        elif current is not None and fields[0] == "grp":
+            if part == "primary":
+                current["grip"] = fields[9]
+            elif part == "subkey":
+                current["subkeys"].append(fields[9])
+    for identity in identities:
+        if identity.get("grip") == primary_grip:
+            if encryption_grip not in identity["subkeys"]:
+                raise SetupError("Existing TPM identity is missing the expected encryption subkey")
+            return identity["fingerprint"]
+    return None
+
+
+def create_key(name, usage, work, gnupg, state_directory, state):
+    run("tpm2_create", "-C", str(work / "parent.ctx"), "-G", "ecc256:null",
+        "-g", "sha256", "-a",
+        "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noda|" + usage,
+        "-p", "file:" + str(work / "auth"),
+        "-u", str(work / (name + ".pub")), "-r", str(work / (name + ".priv")))
+    public = (work / (name + ".pub")).read_bytes()
+    private = (work / (name + ".priv")).read_bytes()  # TPM-wrapped blob only
+    parameters = [b"ecc", [b"curve", b"NIST P-256"], [b"q", public_point(public, usage)]]
+    grip = keygrip(sexp([b"public-key", parameters]))
+    shadow = sexp([b"shadowed-private-key", parameters + [
+        [b"shadowed", b"tpm2-v1", [b"1073741825", public, private]]]])
+    # 1073741825 = TPM_RH_OWNER. Match tpm2daemon's deterministic storage parent.
+    key_file = gnupg / "private-keys-v1.d" / (grip + ".key")
+    if key_file.exists():
+        raise SetupError(f"Refusing to overwrite existing key record: {key_file}")
+    # Save the wrapped record in state first, so interrupted installs can resume.
+    state["keys"][name] = {"grip": grip, "shadow": shadow.hex(),
+                           "public": public.hex(), "private": private.hex()}
+    save_state(state_directory, state)
+    atomic_write(key_file, shadow)
+    print(f"Generated TPM {name} key: {grip}", flush=True)
+
+
+def verify_store(store, password):
+    name = "pass-tpm-check-" + secrets.token_hex(12)
+    value = secrets.token_urlsafe(32).encode() + b"\n"
+    try:
+        run("pass", "insert", "--multiline", name, data=value)
+        decrypted = run("gpg", "--batch", "--pinentry-mode", "loopback",
+                        "--passphrase-fd", "0", "--decrypt", str(store / (name + ".gpg")),
+                        data=password + b"\n")
+        if decrypted != value or run("pass", "show", name) != value:
+            raise SetupError("pass round-trip comparison failed")
+    finally:
+        if (store / (name + ".gpg")).exists():
+            run("pass", "rm", "--force", name)
+    print("Verified pass write, TPM decryption, and exact content comparison.")
+
+
+def initialize(store, gnupg, state_directory, uid, runtime):
+    recipient = store / ".gpg-id"
+    if recipient.exists():
+        print(f"Already initialized; left unchanged: {recipient}\n{recipient.read_text().strip()}")
+        return
+    if store.exists() and any(store.rglob("*.gpg")):
+        raise SetupError("Store contains encrypted entries without .gpg-id; refusing to change recipients")
+    state_file = state_directory / "state.json"
+    state = json.loads(state_file.read_text()) if state_file.exists() else {"keys": {}, "uid": uid}
+    if state["uid"] != uid:
+        raise SetupError("An interrupted setup used another UID; retry with that --uid")
+    password = ask_passphrase()
+    private_directory = gnupg / "private-keys-v1.d"
+    private_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with tempfile.TemporaryDirectory(prefix="pass-tpm-", dir=runtime) as temporary:
+        work = Path(temporary)
+        (work / "auth").write_bytes(password)
+        if len(state["keys"]) < 2:
+            run("tpm2_createprimary", "-C", "o", "-G", "ecc256:null:aes128cfb", "-g", "sha256",
+                "-a", "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|noda|restricted|decrypt",
+                "-c", str(work / "parent.ctx"))
+        if "primary" in state["keys"] and "encryption" not in state["keys"]:
+            # Before generating another key, verify the retry used the original PIN.
+            # Otherwise a partial retry could give the two keys different PINs.
+            key = state["keys"]["primary"]
+            for suffix in ("public", "private"):
+                (work / suffix).write_bytes(bytes.fromhex(key[suffix]))
+            run("tpm2_load", "-C", str(work / "parent.ctx"), "-u", str(work / "public"),
+                "-r", str(work / "private"), "-c", str(work / "primary.ctx"))
+            (work / "digest").write_bytes(secrets.token_bytes(32))
+            run("tpm2_sign", "-c", str(work / "primary.ctx"), "-p", "file:" + str(work / "auth"),
+                "-g", "sha256", "-s", "ecdsa", "-d", str(work / "digest"),
+                "-o", str(work / "signature"))
+        for name, usage in [("primary", "sign"), ("encryption", "decrypt")]:
+            if name not in state["keys"]:
+                create_key(name, usage, work, gnupg, state_directory, state)
+            else:
+                key = state["keys"][name]
+                target = private_directory / (key["grip"] + ".key")
+                saved = bytes.fromhex(key["shadow"])
+                if target.exists() and target.read_bytes() != saved:
+                    raise SetupError(f"Key record changed since interrupted setup: {target}")
+                if not target.exists():
+                    atomic_write(target, saved)
+        primary = state["keys"]["primary"]["grip"]
+        encryption = state["keys"]["encryption"]["grip"]
+        fingerprint = find_identity(primary, encryption)
+        if not fingerprint:
+            parameters = (f"Key-Type: ECDSA\nKey-Curve: nistp256\nKey-Grip: {primary}\n"
+                          f"Key-Usage: sign\nSubkey-Type: ECDH\nSubkey-Curve: nistp256\n"
+                          f"Subkey-Grip: {encryption}\nSubkey-Usage: encrypt\n"
+                          f"Name-Real: {uid}\nName-Comment: TPM\nExpire-Date: 0\n%commit\n")
+            parameter_file = work / "openpgp-params"
+            parameter_file.write_text(parameters)
+            run("gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0",
+                "--generate-key", str(parameter_file), data=password + b"\n")
+            fingerprint = find_identity(primary, encryption)
+            if not fingerprint:
+                raise SetupError("GnuPG did not register the expected TPM identity")
+        run("pass", "init", fingerprint)
+        try:
+            verify_store(store, password)
+        except (SetupError, KeyboardInterrupt):
+            # Restore the uninitialized state so retry will run verification again.
+            # Only remove the recipient file if it is still the one we wrote.
+            if recipient.read_text().strip() == fingerprint:
+                recipient.unlink()
+            raise
+    # The permanent wrapped key records live in GNUPGHOME; discard recovery copies.
+    state_file.unlink(missing_ok=True)
+    print(f"Initialized {store}\nGPG fingerprint: {fingerprint}\n"
+          f"Keep the TPM-wrapped key records in {private_directory}.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="check host prerequisites without creating keys")
+    parser.add_argument("--store", type=Path, help="password-store directory (default: PASSWORD_STORE_DIR or ~/.password-store)")
+    parser.add_argument("--uid", default=getpass.getuser() + " local keyring", help="OpenPGP identity name")
+    args = parser.parse_args()
+    if Path("/.flatpak-info").exists():
+        os.execvp("flatpak-spawn", ["flatpak-spawn", "--host", "/usr/bin/python3",
+                                  str(Path(__file__).resolve()), *sys.argv[1:]])
+    if os.geteuid() == 0:
+        raise SetupError("Run as your normal user, not root")
+    if not args.uid.strip() or any(c in args.uid for c in "\r\n\0"):
+        raise SetupError("--uid must be a non-empty single line")
+    required = ["gpg", "gpgconf", "pass", "pinentry", "tpm2_createprimary", "tpm2_create",
+                "tpm2_load", "tpm2_sign"]
+    missing = [name for name in required if not shutil.which(name)]
+    if missing or not ctypes.util.find_library("gcrypt"):
+        raise SetupError("Missing dependencies: " + ", ".join(missing or ["libgcrypt"]))
+    components = run("gpgconf", "--list-components").decode().splitlines()
+    if not any(line.startswith("tpm2daemon:") and os.access(
+            os.fsdecode(urllib.parse.unquote_to_bytes(line.split(":", 2)[2])), os.X_OK)
+            for line in components):
+        raise SetupError("GnuPG's tpm2daemon is missing; install the GnuPG TPM backend")
+    if not os.access("/dev/tpmrm0", os.R_OK | os.W_OK):
+        try:
+            tss = grp.getgrnam("tss")
+            if getpass.getuser() in tss.gr_mem and tss.gr_gid not in os.getgroups():
+                command = shlex.join([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
+                os.execvp("sg", ["sg", "tss", "-c", command])
+        except KeyError:
+            pass
+        raise SetupError("No read/write access to /dev/tpmrm0. Add your user to tss and log in again; "
+                         "gpg-agent must also run with TPM access.")
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    if not runtime.is_dir() or runtime.stat().st_uid != os.getuid() or runtime.stat().st_mode & 0o077:
+        raise SetupError("A private XDG_RUNTIME_DIR is required for temporary authorization data")
+    gnupg = Path(os.fsdecode(urllib.parse.unquote_to_bytes(
+        run("gpgconf", "--list-dirs", "homedir").strip()))).resolve()
+    store = (args.store or Path(os.environ.get("PASSWORD_STORE_DIR", "~/.password-store"))).expanduser().resolve()
+    if args.check:
+        print(f"Prerequisites OK.\nGnuPG home: {gnupg}\nPassword store: {store}\n"
+              "pinentry must have a working UI; pinentry-gnome3 requires gcr3.\n"
+              "Keys and store were not modified.")
+        return
+    os.umask(0o077)
+    os.environ.update(GNUPGHOME=str(gnupg), PASSWORD_STORE_DIR=str(store),
+                      TPM2TOOLS_TCTI="device:/dev/tpmrm0")
+    identity = hashlib.sha256(os.fsencode(str(gnupg) + "\0" + str(store))).hexdigest()[:20]
+    state_directory = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "pass-tpm-init" / identity
+    state_directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+    with (state_directory / "lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SetupError("Another initialization is already running for this store") from None
+        initialize(store, gnupg, state_directory, args.uid, runtime)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (SetupError, OSError, ValueError) as error:
+        print(f"pass-tpm-init: {error}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nCancelled; retry with the same TPM passphrase to resume.", file=sys.stderr)
+        sys.exit(130)
