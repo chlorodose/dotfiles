@@ -7,11 +7,13 @@ import re
 import signal
 import subprocess
 import time
+from collections import deque
 from pathlib import Path
 
 CACHE = Path.home() / '.cache/valkyrie'
 CACHE.mkdir(parents=True, exist_ok=True)
 PREV = {}
+GPU_LOAD_CONFIRM_SAMPLES = 3
 
 
 def read(path, default=''):
@@ -46,6 +48,57 @@ def delta(key, value, elapsed):
     return max(0, value - old) / elapsed if old is not None and elapsed > 0 else 0
 
 
+def add_health(out, *, previous_gpu_loads=(), cpu_temp=None, gpu_temp=None,
+               dimm_temp=None, disk_temp=None):
+    """Keep warning thresholds and severity shared by both panels.
+
+    Utilization is a capacity warning, not a hardware fault. Missing temperature
+    sensors stay neutral; they must not be interpreted as overheating.
+    """
+    # A load threshold must hold for every sample in the window. The minimum
+    # lets alerts clear immediately and requires separate confirmation for red.
+    gpu_loads = (*previous_gpu_loads, out['gpu_pct'])
+    confirmed_gpu_load = min(gpu_loads) if len(gpu_loads) == GPU_LOAD_CONFIRM_SAMPLES else None
+    checks = [
+        ('cpu', 'cpu_load', out['cpu_pct'], 80, 95, 'CPU LOAD'),
+        ('cpu', 'cpu_temp', cpu_temp, 80, 90, 'CPU TEMP'),
+        ('gpu', 'gpu_load', confirmed_gpu_load, 80, 95, 'GPU LOAD'),
+        ('gpu', 'gpu_temp', gpu_temp, 78, 85, 'GPU TEMP'),
+        ('gpu', 'gpu_vram', out['gpu_vram_pct'], 80, 95, 'VRAM'),
+        ('memory', 'ram', out['ram_pct'], 80, 95, 'RAM'),
+        ('memory', 'swap', out['swap_pct'], 80, 95, 'SWAP'),
+        ('memory', 'dimm_temp', dimm_temp, 70, 80, 'DIMM TEMP'),
+        ('storage', 'var', out['var_pct'], 80, 90, '/VAR'),
+        ('storage', 'disk_temp', disk_temp, 65, 75, 'DISK TEMP'),
+    ]
+    alerts = []
+    classes = ('ok', 'warn', 'hot')
+    for group in ('cpu', 'gpu', 'memory', 'storage'):
+        out[f'{group}_class'] = 'ok'
+        out[f'{group}_status'] = 'NORMAL'
+    for group, metric, value, warning, critical, label in checks:
+        severity = 0 if value is None else 2 if value >= critical else 1 if value >= warning else 0
+        out[f'{metric}_class'] = classes[severity]
+        if severity:
+            alerts.append((severity, group, label))
+    # Show the most severe condition first, retaining stable order for ties.
+    alerts.sort(key=lambda alert: alert[0], reverse=True)
+    for group in ('cpu', 'gpu', 'memory', 'storage'):
+        group_alerts = [alert for alert in alerts if alert[1] == group]
+        if group_alerts:
+            severity, _, label = group_alerts[0]
+            out[f'{group}_class'] = classes[severity]
+            out[f'{group}_status'] = f'{label} {"HIGH" if severity == 2 else "WARN"}'
+    out['health_class'] = classes[alerts[0][0]] if alerts else 'ok'
+    out['health'] = out[f'{alerts[0][1]}_status'] if alerts else 'SYSTEM ONLINE'
+    if len(alerts) > 1:
+        out['health'] += f' +{len(alerts) - 1}'
+    out['health_detail'] = ' · '.join(
+        f'{label} {"HIGH" if severity == 2 else "WARN"}'
+        for severity, _, label in alerts
+    ) or 'All monitored metrics below warning thresholds'
+
+
 def sensors():
     result = []
     for hw in Path('/sys/class/hwmon').glob('hwmon*'):
@@ -63,7 +116,7 @@ def sensors():
     return result
 
 
-def sample(elapsed):
+def sample(elapsed, previous_gpu_loads=()):
     out = {}
     cpu = [int(x) for x in read('/proc/stat').splitlines()[0].split()[1:9]]
     total, idle = sum(cpu), cpu[3] + cpu[4]
@@ -154,9 +207,9 @@ def sample(elapsed):
     uptime = int(float(read('/proc/uptime','0').split()[0])); days, hours = divmod(uptime//3600,24)
     out.update(clock=time.strftime('%H:%M'), date=time.strftime('%a · %d %b'),
                uptime=f'{days}d {hours}h' if days else f'{hours}h {uptime//60%60:02d}m',
-               hostname=os.uname().nodename, updated=time.strftime('%H:%M:%S'),
-               health='THERMAL ALERT' if (tctl or 0)>=90 or (temp or 0)>=85 or (disk_temp or 0)>=75 else 'SYSTEM ONLINE',
-               health_class='hot' if (tctl or 0)>=90 or (temp or 0)>=85 or (disk_temp or 0)>=75 else 'ok')
+               hostname=os.uname().nodename, updated=time.strftime('%H:%M:%S'))
+    add_health(out, previous_gpu_loads=previous_gpu_loads, cpu_temp=tctl, gpu_temp=temp,
+               dimm_temp=max(dimms) if dimms else None, disk_temp=disk_temp)
     return out
 
 
@@ -170,13 +223,17 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--once',action='store_true');parser.add_argument('--list-sensors',action='store_true');args=parser.parse_args()
     if args.list_sensors:
         print(json.dumps(sensors(),ensure_ascii=False,indent=2));return
+    previous_gpu_loads = deque(maxlen=GPU_LOAD_CONFIRM_SAMPLES - 1)
     before=time.monotonic()
     while True:
         now=time.monotonic()
         try:
-            write_stats(sample(max(.001, now-before)))
+            out = sample(max(.001, now-before), previous_gpu_loads)
+            write_stats(out)
+            previous_gpu_loads.append(out['gpu_pct'])
         except Exception as exc:
             # Preserve last good sample and report failures to the service journal.
+            previous_gpu_loads.clear()
             print(f'Telemetry sample failed: {exc}',flush=True)
         before=now
         if args.once:return

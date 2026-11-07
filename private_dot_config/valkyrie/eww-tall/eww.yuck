@@ -1,7 +1,8 @@
+;; Physical display: the long screen is outside the case, with a power button on its right.
 (include "../telemetry.yuck")
 (include "../fan-map.yuck")
-(defwidget row [title value]
- (box :class "data-row" :space-evenly false
+(defwidget row [title value state]
+ (box :class "data-row ${state}" :space-evenly false
   (label :class "muted" :text title :xalign 0 :hexpand true)
   (label :class "row-value" :text value :xalign 1)))
 (defwindow tall :monitor 0
@@ -14,50 +15,50 @@
    (label :class "muted" :text "UP ${stats.uptime}")
    (label :class "clock" :text {stats.clock}))
   (box :space-evenly true :spacing 10 :vexpand true
-   (box :orientation "v" :class "card cpu" :space-evenly false :spacing 7
+   (box :orientation "v" :class "card cpu ${stats.cpu_class}" :space-evenly false :spacing 7
     (label :class "title" :text "01  CPU" :xalign 0)
     (label :class "model" :text "RYZEN 9 9950X3D" :xalign 0)
     (box :space-evenly false
-     (label :class "big" :text {stats.cpu_load} :xalign 0 :hexpand true)
-     (label :class "temperature" :text {stats.cpu_temp_c} :xalign 1 :valign "end"))
-    (progress :value {stats.cpu_pct})
-    (row :title "CLOCK AVG" :value {stats.cpu_ghz})
-    (row :title "CPU POWER" :value {stats.cpu_power})
-    (row :title "CPU FAN" :value {stats.fans[cpu_fan_channel] == "N/A" ? "N/A" : "${stats.fans[cpu_fan_channel]} RPM"})
-    (row :title "AIO PUMP" :value {stats.fans[pump_channel] == "N/A" ? "N/A" : "${stats.fans[pump_channel]} RPM"})
+     (label :class "big ${stats.cpu_load_class}" :text {stats.cpu_load} :xalign 0 :hexpand true)
+     (label :class "temperature ${stats.cpu_temp_class}" :text {stats.cpu_temp_c} :xalign 1 :valign "end"))
+    (progress :class "${stats.cpu_load_class}" :value {stats.cpu_pct})
+    (row :state "ok" :title "CLOCK AVG" :value {stats.cpu_ghz})
+    (row :state "ok" :title "CPU POWER" :value {stats.cpu_power})
+    (row :state "ok" :title "CPU FAN" :value {stats.fans[cpu_fan_channel] == "N/A" ? "N/A" : "${stats.fans[cpu_fan_channel]} RPM"})
+    (row :state "ok" :title "AIO PUMP" :value {stats.fans[pump_channel] == "N/A" ? "N/A" : "${stats.fans[pump_channel]} RPM"})
     (label :class "footnote" :text "16 CORES / 32 THREADS" :xalign 0 :valign "end" :vexpand true))
-   (box :orientation "v" :class "card gpu" :space-evenly false :spacing 7
+   (box :orientation "v" :class "card gpu ${stats.gpu_class}" :space-evenly false :spacing 7
     (label :class "title" :text "02  GRAPHICS" :xalign 0)
     (label :class "model" :text "GEFORCE RTX 3080" :xalign 0)
     (box :space-evenly false
-     (label :class "big" :text {stats.gpu_load} :xalign 0 :hexpand true)
-     (label :class "temperature" :text {stats.gpu_temp} :xalign 1 :valign "end"))
-    (progress :value {stats.gpu_pct})
-    (row :title "VRAM" :value {stats.gpu_vram})
-    (row :title "BOARD POWER" :value {stats.gpu_power})
-    (row :title "GPU FAN" :value {stats.gpu_fan})
+     (label :class "big ${stats.gpu_load_class}" :text {stats.gpu_load} :xalign 0 :hexpand true)
+     (label :class "temperature ${stats.gpu_temp_class}" :text {stats.gpu_temp} :xalign 1 :valign "end"))
+    (progress :class "${stats.gpu_load_class}" :value {stats.gpu_pct})
+    (row :state {stats.gpu_vram_class} :title "VRAM" :value {stats.gpu_vram})
+    (row :state "ok" :title "BOARD POWER" :value {stats.gpu_power})
+    (row :state "ok" :title "GPU FAN" :value {stats.gpu_fan})
     (label :class "footnote" :text {stats.gpu_clock} :xalign 0 :valign "end" :vexpand true))
-   (box :orientation "v" :class "card memory" :space-evenly false :spacing 7
+   (box :orientation "v" :class "card memory ${stats.memory_class}" :space-evenly false :spacing 7
     (label :class "title" :text "03  MEMORY" :xalign 0)
     (label :class "model" :text "RAM / SWAP" :xalign 0)
     (box :space-evenly false
-     (label :class "big" :text {stats.ram_load} :xalign 0 :hexpand true)
-     (label :class "temperature" :text {stats.dimm_temp} :xalign 1 :valign "end"))
-    (progress :value {stats.ram_pct})
-    (row :title "RAM USED" :value {stats.ram_detail})
-    (row :title "SWAP" :value {stats.swap_detail})
-    (progress :class "swap-bar" :value {stats.swap_pct})
+     (label :class "big ${stats.ram_class}" :text {stats.ram_load} :xalign 0 :hexpand true)
+     (label :class "temperature ${stats.dimm_temp_class}" :text {stats.dimm_temp} :xalign 1 :valign "end"))
+    (progress :class "${stats.ram_class}" :value {stats.ram_pct})
+    (row :state {stats.ram_class} :title "RAM USED" :value {stats.ram_detail})
+    (row :state {stats.swap_class} :title "SWAP" :value {stats.swap_detail})
+    (progress :class "swap-bar ${stats.swap_class}" :value {stats.swap_pct})
     (label :class "footnote" :text "DIMM: ${stats.dimm_detail}" :xalign 0 :valign "end" :vexpand true))
-   (box :orientation "v" :class "card storage" :space-evenly false :spacing 7
+   (box :orientation "v" :class "card storage ${stats.storage_class}" :space-evenly false :spacing 7
     (label :class "title" :text "04  STORAGE" :xalign 0)
     (label :class "model" :text "/VAR · BCACHEFS" :xalign 0)
     (box :space-evenly false
-     (label :class "big" :text {stats.var_load} :xalign 0 :hexpand true)
-     (label :class "temperature" :text {stats.disk_temp} :xalign 1 :valign "end"))
-    (progress :value {stats.var_pct})
-    (row :title "USED" :value {stats.var_detail})
-    (row :title "READ" :value "${stats.disk_read} MiB/s")
-    (row :title "WRITE" :value "${stats.disk_write} MiB/s")
+     (label :class "big ${stats.var_class}" :text {stats.var_load} :xalign 0 :hexpand true)
+     (label :class "temperature ${stats.disk_temp_class}" :text {stats.disk_temp} :xalign 1 :valign "end"))
+    (progress :class "${stats.var_class}" :value {stats.var_pct})
+    (row :state {stats.var_class} :title "USED" :value {stats.var_detail})
+    (row :state "ok" :title "READ" :value "${stats.disk_read} MiB/s")
+    (row :state "ok" :title "WRITE" :value "${stats.disk_write} MiB/s")
     (label :class "footnote" :text {stats.var_free} :xalign 0 :valign "end" :vexpand true)))
   (box :class "footer" :space-evenly false :spacing 16
    (box :orientation "v" :space-evenly false :spacing 4

@@ -3,8 +3,8 @@
 .header { min-height: 24px; }
 .brand { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
 .clock { font-size: 23px; font-weight: bold; color: #f4f8fc; }
-.ok { font-size: 10px; color: #66d9af; letter-spacing: 1px; }
-.hot { font-size: 10px; color: #ff776f; letter-spacing: 1px; }
+.header .ok { font-size: 10px; color: #66d9af; letter-spacing: 1px; }
+.header .hot { font-size: 10px; color: #ff776f; letter-spacing: 1px; }
 .muted { font-size: 10px; color: #8194aa; }
 .card { border: 1px solid #253347; border-radius: 10px; background: #111c29; padding: 12px; }
 .title { font-size: 11px; font-weight: bold; letter-spacing: 1px; }
@@ -29,3 +29,14 @@ progressbar progress { background: #71d8ee; border-radius: 4px; min-height: 5px;
 .renderer { color: #71d8ee; font-size: 10px; }
 
 .fan-values { color: #d6e3f2; font-size: 11px; }
+
+// Scope status typography to the header; cards and bars retain their sizing.
+.header .warn { font-size: 10px; color: #f4c56a; letter-spacing: 1px; }
+.card.warn { border-color: #f4c56a; }
+.card.hot { border-color: #ff776f; }
+.card.warn .title { color: #f4c56a; }
+.card.hot .title { color: #ff776f; }
+.card .big.warn, .card .temperature.warn, .data-row.warn .row-value { color: #f4c56a; }
+.card .big.hot, .card .temperature.hot, .data-row.hot .row-value { color: #ff776f; }
+.card progressbar.warn progress { background: #f4c56a; }
+.card progressbar.hot progress { background: #ff776f; }

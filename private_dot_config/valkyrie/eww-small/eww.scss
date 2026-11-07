@@ -11,3 +11,11 @@ progressbar progress { background: #71d8ee; border-radius: 4px; min-height: 5px;
 .cooling { margin-top: 4px; border-top: 1px solid #233143; padding-top: 7px; }
 .rpm { color: #dce7f4; font-size: 18px; font-weight: bold; }
 .sensor-note { color: #6f8299; font-size: 10px; }
+
+// Keep geometry fixed when the CPU enters or leaves a warning state.
+.cooler.warn { box-shadow: inset 0 0 0 2px #f4c56a; }
+.cooler.hot { box-shadow: inset 0 0 0 2px #ff776f; }
+.temperature.warn, .load-value.warn, .live.warn, .sensor-note.warn { color: #f4c56a; }
+.temperature.hot, .load-value.hot, .live.hot, .sensor-note.hot { color: #ff776f; }
+progressbar.warn progress { background: #f4c56a; }
+progressbar.hot progress { background: #ff776f; }
