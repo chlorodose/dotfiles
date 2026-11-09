@@ -48,7 +48,7 @@ orientation = "horizontal"
 
 [shell.screenshot]
 confirm_region = true
-directory = "/home/chlorodose/Pictures/Screenshots"
+directory = "/home/lilith/Pictures/Screenshots"
 filename_pattern = "screenshot_%Y-%m-%d_%H-%m"
 show_cursor = true
 
@@ -57,7 +57,7 @@ builtin_ids = ["gtk3", "gtk4", "kitty", "niri", "qt"]
 community_ids = ["neovim", "fcitx5", "pywalfox", "vscode"]
 
 [wallpaper]
-directory = "/home/chlorodose/Pictures/Wallpapers"
+directory = "/home/lilith/Pictures/Wallpapers"
 transition_on_startup = true
 
 [dock]
@@ -160,4 +160,4 @@ glyph = "rocket"
 agent_cmd = "false"
 
 [plugin_settings."setyvii/niri-rules-studio"]
-niri_config = "/home/chlorodose/.config/niri/managed.kdl"
+niri_config = "/home/lilith/.config/niri/managed.kdl"
