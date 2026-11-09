@@ -4,6 +4,16 @@ ZPFX="${XDG_DATA_HOME:-${HOME}/.local/share}/zsh"
 typeset -U path
 path=("$HOME/.local/bin" $path)
 
+# Bind GPG prompts to this terminal; use curses when connected over SSH.
+if [[ -o interactive && -t 0 && -n "$TTY" ]]; then
+    export GPG_TTY="$TTY"
+    if [[ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
+        export PINENTRY_USER_DATA=ssh-terminal
+    elif [[ "${PINENTRY_USER_DATA:-}" == ssh-terminal ]]; then
+        unset PINENTRY_USER_DATA
+    fi
+fi
+
 declare -A ZINIT
 ZINIT[HOME_DIR]="${ZPFX}"
 ZINIT[BIN_DIR]="${ZINIT[HOME_DIR]}/plugins/zinit"

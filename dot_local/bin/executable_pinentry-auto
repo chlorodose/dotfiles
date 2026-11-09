@@ -1,0 +1,6 @@
+#!/bin/sh
+# GPG forwards PINENTRY_USER_DATA from the client to pinentry.
+case "${PINENTRY_USER_DATA:-}" in
+    ssh-terminal) exec /usr/bin/pinentry-curses "$@" ;;
+    *) exec /usr/bin/pinentry "$@" ;;
+esac
